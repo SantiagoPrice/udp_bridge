@@ -23,7 +23,7 @@ from ament_index_python.packages import get_package_share_directory
 import yaml
 
 pkg_path = get_package_share_directory('udp_bridge')
-API_PATH = os.path.join(pkg_path,'conf/ips.yaml')
+IPs_PATH = os.path.join(pkg_path,'conf/ips.yaml')
 PROMPT_PATH = os.path.join(pkg_path,'others/prompts.yaml')
 
 
@@ -37,7 +37,7 @@ class UdpReceiverNode(Node):
     def __init__(self):
         super().__init__("udp_receiver_node")
 
-        with open(API_PATH, "r") as f:
+        with open(IPs_PATH, "r") as f:
             conf_handlr= yaml.safe_load(f)
             host = conf_handlr["host"]
             port = conf_handlr["port"]
