@@ -24,7 +24,6 @@ import yaml
 
 pkg_path = get_package_share_directory('udp_bridge')
 IPs_PATH = os.path.join(pkg_path,'conf/ips.yaml')
-PROMPT_PATH = os.path.join(pkg_path,'others/prompts.yaml')
 
 
 

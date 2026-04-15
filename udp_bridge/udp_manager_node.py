@@ -11,10 +11,9 @@ from action_msgs.srv import CancelGoal
 import argparse
 
 class TimerManagerNode(Node):
-    def __init__(self,debug=False):
+    def __init__(self):
         super().__init__('udp_manager_node')
 
-        self.debug=debug
 
         self.subscription = self.create_subscription(
             UInt8MultiArray,
@@ -25,8 +24,10 @@ class TimerManagerNode(Node):
 
         self.publisher = self.create_publisher(Header, '/udp/response', 10)
 
+        self.declare_parameter('debug', False)
+        self.debug = self.get_parameter('debug').value
+
         self.previous_bit = 0
-        self.timer_phase = 0  # 0 = idle, 1 = first timer, 2 = second timer
         self.active_timer = None
         self.nav2_goal_handle = None  # Track the current goal handle
 
@@ -38,12 +39,9 @@ class TimerManagerNode(Node):
             "FollowPath.wz_max": 0.8,
             "FollowPath.wz_std": 0.6,}
         
-        self.cont_pars_slow = {
-            "FollowPath.vx_max": 0.25,
-            "FollowPath.vx_min": -0.25,
-            "FollowPath.vx_std": 0.15,
-            "FollowPath.wz_max": 0.4,
-            "FollowPath.wz_std": 0.3,}
+        self.vm     = self.cont_pars_normal["FollowPath.vx_max"] #max speed
+        self.delt_v = self.vm / 5  #0.1  discrete v reductions
+        
         
         self.cont_par_cli = self.create_client(
             srv_type=SetParameters,
@@ -65,49 +63,41 @@ class TimerManagerNode(Node):
             callback_group=ReentrantCallbackGroup()
         )
 
+        self.active_timer = self.create_timer(0.5, self.timer_callback)
+
     def listener_callback(self, msg):
         if not msg.data:
             return
 
         current_bit = msg.data[0]-48  # first bit
-        if current_bit == 1 and self.previous_bit == 0:
-            self.start_first_timer()
-            msg = Header()
-            msg.frame_id = str(current_bit)
-            msg.stamp = self.get_clock().now().to_msg()
-            self.publisher.publish(msg)
 
-        elif current_bit == 0 and self.timer_phase != 0:
-            self.cancel_and_reset_timer()
-            #self.get_logger().info('Bit went to 0 but it is ignored).')
-            msg = Header()
-            msg.frame_id = str(current_bit)
-            msg.stamp = self.get_clock().now().to_msg()
-            self.publisher.publish(msg)
+        msg = Header()
+        msg.frame_id = str(current_bit)
+        msg.stamp = self.get_clock().now().to_msg()
+        self.publisher.publish(msg)
 
-        self.previous_bit = current_bit
+        self.delt_v = abs(self.delt_v) * (-1) ** current_bit # positive when signal is 0 , negative otherwise
+      
+      
+    def timer_callback(self):
+        if self.delt_v < 0:
+            if self.cont_pars_normal["FollowPath.vx_max"] >  (self.delt_v+0.01):
+                self.cont_pars_normal["FollowPath.vx_max"] += self.delt_v
+            else:
+                if not self.debug:
+                    self.cancel_nav2_goal()
+                return
 
-    def start_first_timer(self):
-        self.cancel_active_timer()
+        else:
+            if self.cont_pars_normal["FollowPath.vx_max"] <  (self.vm - self.delt_v):
+                self.cont_pars_normal["FollowPath.vx_max"] += self.delt_v
+            else:
+                pass
+  
         if not self.debug:
-            self.reload_nav2_conf(self.param_update_callback, self.cont_par_cli, self.cont_pars_slow)
-        self.timer_phase = 1
-        self.get_logger().info('First 5s timer started.')
-        self.active_timer = self.create_timer(5.0, self.first_timer_callback)
-        
-    def first_timer_callback(self):
-        self.cancel_active_timer()
-        self.get_logger().info('First timer concluded: starting second 5s timer.')
-        self.timer_phase = 2
-        self.cancel_nav2_goal()
-        # We ommit the second timer
-        #self.active_timer = self.create_timer(5.0, self.second_timer_callback)
-
-    def second_timer_callback(self):
-        self.cancel_active_timer()
-        self.get_logger().info('Second timer concluded: cancelling Nav2 goal.')
-        self.timer_phase = 0
-        self.cancel_nav2_goal()
+            self.reload_nav2_conf(self.param_update_callback, self.cont_par_cli, self.cont_pars_normal)
+        else:
+            self.get_logger().info("New speed: {}".format(self.cont_pars_normal["FollowPath.vx_max"]))
 
     def cancel_nav2_goal(self):
         request = CancelGoal.Request()
@@ -124,18 +114,6 @@ class TimerManagerNode(Node):
         except Exception as e:
             self.get_logger().error(f'Failed to cancel Nav2 goal: {e}')
 
-    def cancel_and_reset_timer(self):
-        if not self.debug:
-            self.reload_nav2_conf(self.param_update_callback, self.cont_par_cli, self.cont_pars_normal)
-        self.cancel_active_timer()
-        self.timer_phase = 0
-        self.get_logger().info('Timer cancelled and reset (bit went to 0).')
-
-    def cancel_active_timer(self):
-        if self.active_timer is not None:
-            self.active_timer.cancel()
-            self.destroy_timer(self.active_timer)
-            self.active_timer = None
 
     def reload_nav2_conf(self, callbackFunc, client, param_dict):
         request = SetParameters.Request()
@@ -153,12 +131,8 @@ class TimerManagerNode(Node):
 
 def main(args=None):
 
-    parser = argparse.ArgumentParser(description='Timer Manager Node')
-    parser.add_argument('--debug', action='store_true', help='Boolean flag argument')
-    parsed_args, remaining = parser.parse_known_args(args)
-
     rclpy.init(args=args)
-    node = TimerManagerNode(debug=parsed_args.debug)
+    node = TimerManagerNode()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
