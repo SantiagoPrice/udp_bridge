@@ -20,6 +20,7 @@ setup(
         "console_scripts": [
             "udp_receiver_node = udp_bridge.udp_receiver_node:main",
             "udp_manager_node = udp_bridge.udp_manager_node:main",
+            "udp_dummy = udp_bridge.UDP_dummy:main",
         ],
     },
 )
