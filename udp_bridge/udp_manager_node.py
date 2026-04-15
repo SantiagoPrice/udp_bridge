@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import UInt8MultiArray
+from std_msgs.msg import UInt8MultiArray , Header
 from rclpy.parameter import Parameter
 from rcl_interfaces.srv import SetParameters
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -22,6 +22,8 @@ class TimerManagerNode(Node):
             self.listener_callback,
             10
         )
+
+        self.publisher = self.create_publisher(Header, '/udp/response', 10)
 
         self.previous_bit = 0
         self.timer_phase = 0  # 0 = idle, 1 = first timer, 2 = second timer
@@ -70,26 +72,36 @@ class TimerManagerNode(Node):
         current_bit = msg.data[0]-48  # first bit
         if current_bit == 1 and self.previous_bit == 0:
             self.start_first_timer()
+            msg = Header()
+            msg.frame_id = str(current_bit)
+            msg.stamp = self.get_clock().now().to_msg()
+            self.publisher.publish(msg)
 
         elif current_bit == 0 and self.timer_phase != 0:
             self.cancel_and_reset_timer()
+            #self.get_logger().info('Bit went to 0 but it is ignored).')
+            msg = Header()
+            msg.frame_id = str(current_bit)
+            msg.stamp = self.get_clock().now().to_msg()
+            self.publisher.publish(msg)
 
         self.previous_bit = current_bit
 
     def start_first_timer(self):
         self.cancel_active_timer()
+        if not self.debug:
+            self.reload_nav2_conf(self.param_update_callback, self.cont_par_cli, self.cont_pars_slow)
         self.timer_phase = 1
         self.get_logger().info('First 5s timer started.')
         self.active_timer = self.create_timer(5.0, self.first_timer_callback)
         
-
     def first_timer_callback(self):
-        if not self.debug:
-            self.reload_nav2_conf(self.param_update_callback, self.cont_par_cli, self.cont_pars_slow)
         self.cancel_active_timer()
         self.get_logger().info('First timer concluded: starting second 5s timer.')
         self.timer_phase = 2
-        self.active_timer = self.create_timer(5.0, self.second_timer_callback)
+        self.cancel_nav2_goal()
+        # We ommit the second timer
+        #self.active_timer = self.create_timer(5.0, self.second_timer_callback)
 
     def second_timer_callback(self):
         self.cancel_active_timer()
@@ -103,9 +115,6 @@ class TimerManagerNode(Node):
         future = self.cancel_cli.call_async(request)
         future.add_done_callback(self.cancel_nav2_goal_callback)
 
-    def cancel_nav2_goal_callback(self, future):
-        result = future.result()
-        self.get_logger().info(f'Nav2 goals cancelled: {result}')
 
     def cancel_nav2_goal_callback(self, future):
         try:
