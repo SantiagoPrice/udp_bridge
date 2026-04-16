@@ -24,8 +24,8 @@ class TimerManagerNode(Node):
 
         self.publisher = self.create_publisher(Header, '/udp/response', 10)
 
-        self.declare_parameter('debug', False)
-        self.debug = self.get_parameter('debug').value
+        self.declare_parameter('isolated', False)
+        self.isolated = self.get_parameter('isolated').value
 
         self.previous_bit = 0
         self.active_timer = None
@@ -40,7 +40,7 @@ class TimerManagerNode(Node):
             "FollowPath.wz_std": 0.6,}
         
         self.vm     = self.cont_pars_normal["FollowPath.vx_max"] #max speed
-        self.delt_v = self.vm / 5  #0.1  discrete v reductions
+        self.delt_v = self.vm / 20  #0.05  discrete v reductions 0.1 is a bit aggressive
         
         
         self.cont_par_cli = self.create_client(
@@ -63,7 +63,7 @@ class TimerManagerNode(Node):
             callback_group=ReentrantCallbackGroup()
         )
 
-        self.active_timer = self.create_timer(0.5, self.timer_callback)
+        self.active_timer = self.create_timer(0.5, self.timer_callback) # 0.25 is a bit jerky
 
     def listener_callback(self, msg):
         if not msg.data:
@@ -81,10 +81,10 @@ class TimerManagerNode(Node):
       
     def timer_callback(self):
         if self.delt_v < 0:
-            if self.cont_pars_normal["FollowPath.vx_max"] >  (self.delt_v+0.01):
+            if self.cont_pars_normal["FollowPath.vx_max"] >  (abs(self.delt_v)+0.01):
                 self.cont_pars_normal["FollowPath.vx_max"] += self.delt_v
             else:
-                if not self.debug:
+                if not self.isolated:
                     self.cancel_nav2_goal()
                 return
 
@@ -93,11 +93,12 @@ class TimerManagerNode(Node):
                 self.cont_pars_normal["FollowPath.vx_max"] += self.delt_v
             else:
                 pass
+                return
   
-        if not self.debug:
+        if not self.isolated:
             self.reload_nav2_conf(self.param_update_callback, self.cont_par_cli, self.cont_pars_normal)
-        else:
-            self.get_logger().info("New speed: {}".format(self.cont_pars_normal["FollowPath.vx_max"]))
+        
+        self.get_logger().info("New speed: {}".format(self.cont_pars_normal["FollowPath.vx_max"]))
 
     def cancel_nav2_goal(self):
         request = CancelGoal.Request()
