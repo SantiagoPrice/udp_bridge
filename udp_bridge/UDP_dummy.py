@@ -30,11 +30,11 @@ def main(args=None):
     
 
     if mode == "stop":
-        signal = [1,]*21
+        signal = [1,]*int(5/sp)
     elif mode == "partial_recovery":
-        signal = [1,]*3 + [0,]*3 +[1,]*21
+        signal = [1,]*int(3/sp) + [0,]*int(3/sp) +[1,]*int(3/sp)
     else: #full_recovery
-        signal = [1,]*3 + [0,]
+        signal = [1,]*int(3/sp) + [0,]*int(10/sp) 
     
     for bit in signal:
         message = bytes([bit])
