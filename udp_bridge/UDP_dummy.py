@@ -37,7 +37,9 @@ def main(args=None):
         signal = [1,]*int(3/sp) + [0,]*int(10/sp) 
     elif mode == "reset": #controller v is restored. Make sure to not have nav2 goals
         signal = [0,]*int(10/sp)
-    elif mode == "text": 
+    elif mode == "text1": 
+        signal = [b"Go to the fridge"]
+    elif mode == "text2": 
         signal = [b"Go to the table"]
     elif not mode: 
         raise ValueError(f"mode arg is empty")
@@ -45,7 +47,10 @@ def main(args=None):
         raise ValueError(f"Command cannot be recognized {mode}")
 
     for bit in signal:
-        message = bytes([bit])
+        if mode == "text1" or mode == "text2":
+            message = bytes(bit)
+        else:
+            message = bytes([bit])
         try:
             sent = sock.sendto(message, (host, port))
             print(f"Sent {sent} bytes to {host}:{port}")

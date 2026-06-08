@@ -13,7 +13,7 @@ def generate_launch_description():
         Node(
             package='udp_bridge',
             executable='udp_nav_trigger_node',
-            name='udp_manager_node',
+            name='udp_nav_trigger_node',
             output='log',
             parameters=[{'isolated':isolated}],
             arguments=['--ros-args', '--log-level', log_level]
