@@ -21,7 +21,7 @@ def main(args=None):
                 host = conf_handlr["host"]
                 port = conf_handlr["port"]
 
-    mode = sys.argv[1] if len(sys.argv) > 1 else "stop"
+    mode = sys.argv[1] if len(sys.argv) > 1 else ""
     sp   = 0.5 #sampling period
 
     # Create a UDP socket
@@ -33,9 +33,17 @@ def main(args=None):
         signal = [1,]*int(5/sp)
     elif mode == "partial_recovery":
         signal = [1,]*int(3/sp) + [0,]*int(3/sp) +[1,]*int(3/sp)
-    else: #full_recovery
+    elif mode == "full_recovery":
         signal = [1,]*int(3/sp) + [0,]*int(10/sp) 
-    
+    elif mode == "reset": #controller v is restored. Make sure to not have nav2 goals
+        signal = [0,]*int(10/sp)
+    elif mode == "text": 
+        signal = [b"Go to the table"]
+    elif not mode: 
+        raise ValueError(f"mode arg is empty")
+    else: 
+        raise ValueError(f"Command cannot be recognized {mode}")
+
     for bit in signal:
         message = bytes([bit])
         try:
