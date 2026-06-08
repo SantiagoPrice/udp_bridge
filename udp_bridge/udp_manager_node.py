@@ -14,6 +14,14 @@ class TimerManagerNode(Node):
     def __init__(self):
         super().__init__('udp_manager_node')
 
+        self.declare_parameter('isolated', False)
+        self.isolated = self.get_parameter('isolated').value
+
+        self.previous_bit = 0
+        self.active_timer = None
+        self.nav2_goal_handle = None  # Track the current goal handle
+        self.is_goal_cancelled = False
+
 
         self.subscription = self.create_subscription(
             UInt8MultiArray,
@@ -23,13 +31,6 @@ class TimerManagerNode(Node):
         )
 
         self.publisher = self.create_publisher(Header, '/udp/response', 10)
-
-        self.declare_parameter('isolated', False)
-        self.isolated = self.get_parameter('isolated').value
-
-        self.previous_bit = 0
-        self.active_timer = None
-        self.nav2_goal_handle = None  # Track the current goal handle
 
         # Parameters to reduce speed
         self.cont_pars_normal = {
@@ -84,13 +85,16 @@ class TimerManagerNode(Node):
             if self.cont_pars_normal["FollowPath.vx_max"] >  (abs(self.delt_v)+0.01):
                 self.cont_pars_normal["FollowPath.vx_max"] += self.delt_v
             else:
-                if not self.isolated:
+                if not self.isolated and not self.is_goal_cancelled :
+                    self.is_goal_cancelled = True # prevents succesive goal cancelations
                     self.cancel_nav2_goal()
                 return
 
         else:
             if self.cont_pars_normal["FollowPath.vx_max"] <  (self.vm - self.delt_v):
                 self.cont_pars_normal["FollowPath.vx_max"] += self.delt_v
+                if self.is_goal_cancelled: # enables to cancel goal again
+                    self.is_goal_cancelled = False
             else:
                 pass
                 return
